@@ -13,7 +13,11 @@ st.set_page_config(
 @st.cache_resource
 def get_openai_client():
     """Initialize and cache OpenAI client."""
-    return OpenAI(api_key=st.secrets.get("OPENAI_API_KEY", ""))
+    api_key = st.secrets.get("OPENAI_API_KEY", None)
+    if not api_key:
+        st.error("Please add your OPENAI_API_KEY to .streamlit/secrets.toml")
+        st.stop()
+    return OpenAI(api_key=api_key)
 
 client = get_openai_client()
 
@@ -28,15 +32,12 @@ def initialize_session_state():
     
     if 'system_prompt' not in st.session_state:
         st.session_state.system_prompt = None
-    
-    if 'topics_completed' not in st.session_state:
-        st.session_state.topics_completed = 0
 
 initialize_session_state()
 
 
 def call_gpt(user_message: str) -> str:
-    """Call OpenAI GPT API with conversation history and system prompt."""
+    """Call OpenAI API with conversation history and system prompt."""
     # Add user message to history
     st.session_state.messages.append({
         "role": "user",
@@ -69,11 +70,20 @@ def call_gpt(user_message: str) -> str:
         "content": assistant_message
     })
     
-    # Check if topic was marked complete (simple keyword detection)
-    if "topic is complete" in assistant_message.lower():
-        st.session_state.topics_completed += 1
-    
     return assistant_message
+
+
+def trigger_review():
+    """Inject review prompt asking GPT to list covered topics."""
+    review_prompt = """Looking at our conversation so far, please:
+1. List the main ML/DS topics we've discussed
+2. For each topic, write 1 sentence summarizing what we covered
+3. Ask me which topic I'd like to revisit
+
+IMPORTANT: Only list topics we actually discussed. Don't mention anything we haven't covered."""
+    
+    # Call GPT with the review prompt
+    return call_gpt(review_prompt)
 
 
 def reset_session():
@@ -81,7 +91,6 @@ def reset_session():
     st.session_state.messages = []
     st.session_state.depth_level = None
     st.session_state.system_prompt = None
-    st.session_state.topics_completed = 0
 
 
 # ===== UI LAYOUT =====
@@ -97,7 +106,17 @@ with st.sidebar:
     if st.session_state.depth_level:
         st.success(f"**Active Session**")
         st.info(f"**Mode:** {st.session_state.depth_level.title()}")
-        st.metric("Topics Completed", st.session_state.topics_completed)
+        
+        st.markdown("---")
+        
+        # Review button - show after first exchange
+        if len(st.session_state.messages) >= 2:
+            if st.button("📝 Review Session", use_container_width=True, type="primary"):
+                with st.spinner("Preparing review..."):
+                    trigger_review()
+                st.rerun()
+        
+        st.markdown("---")
         
         if st.button("Reset Session", type="secondary"):
             reset_session()
