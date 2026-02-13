@@ -1,6 +1,9 @@
 import streamlit as st
 from openai import OpenAI
 from prompts import get_system_prompt, EXAMPLE_TOPICS
+import chromadb
+from chromadb.config import Settings
+import time
 
 # Page configuration
 st.set_page_config(
@@ -19,7 +22,26 @@ def get_openai_client():
         st.stop()
     return OpenAI(api_key=api_key)
 
+# Initialize ChromaDB client
+@st.cache_resource
+def get_chroma_client():
+    """Initialize and cache ChromaDB client."""
+    client = chromadb.PersistentClient(path="./chroma_db")
+    return client
+
 client = get_openai_client()
+chroma_client = get_chroma_client()
+
+# Get or create collection
+@st.cache_resource
+def get_collection():
+    """Get or create ChromaDB collection for saved messages."""
+    return chroma_client.get_or_create_collection(
+        name="saved_understanding",
+        metadata={"description": "User-saved learning insights"}
+    )
+
+collection = get_collection()
 
 # Session state initialization
 def initialize_session_state():
@@ -58,7 +80,7 @@ def call_gpt(user_message: str) -> str:
         model="gpt-4.1-nano",
         messages=api_messages,
         max_tokens=2000,
-        temperature=0.7
+        temperature=0.5
     )
     
     # Extract response text
@@ -71,6 +93,79 @@ def call_gpt(user_message: str) -> str:
     })
     
     return assistant_message
+
+
+def save_recent_response():
+    """Save the most recent assistant response to ChromaDB."""
+    # Find the last assistant message
+    assistant_messages = [msg for msg in st.session_state.messages if msg["role"] == "assistant"]
+    
+    if not assistant_messages:
+        st.warning("No assistant responses to save yet!")
+        return
+    
+    last_response = assistant_messages[-1]["content"]
+    
+    # Generate unique ID using timestamp
+    save_id = f"save_{int(time.time() * 1000)}"
+    
+    # Save to ChromaDB
+    collection.add(
+        documents=[last_response],
+        ids=[save_id],
+        metadatas=[{
+            "timestamp": str(int(time.time())),
+            "depth_level": st.session_state.depth_level
+        }]
+    )
+    
+    st.success("✅ Response saved!")
+
+
+def retrieve_previous_understanding():
+    """Retrieve similar saved messages based on recent conversation context."""
+    # Get recent 2 messages as query context
+    if len(st.session_state.messages) < 2:
+        st.info("Not enough conversation yet. Start learning first!")
+        return
+    
+    recent_messages = st.session_state.messages[-2:]
+    query_text = " ".join([msg["content"] for msg in recent_messages])
+    
+    # Query ChromaDB for similar saved messages
+    try:
+        results = collection.query(
+            query_texts=[query_text],
+            n_results=1
+        )
+        
+        if results['documents'] and len(results['documents'][0]) > 0:
+            saved_message = results['documents'][0][0]
+            
+            # Inject into conversation
+            retrieve_prompt = f"""SYSTEM NOTE: The user just clicked "Retrieve Previous Understanding." 
+Below is a message WE (you and the user) worked through in a PAST conversation that seems 
+relevant to our current discussion. This is NOT something the user just said now - it's 
+something we figured out together before.
+
+===== PREVIOUSLY SAVED UNDERSTANDING =====
+{saved_message}
+============================================
+
+Please acknowledge this past understanding and ask the user if they'd like to:
+1. Refine/improve this understanding
+2. Connect it to what we're currently discussing
+3. Explore a different aspect of the topic
+
+Be clear this is from a previous session, not something they just explained."""
+            
+            call_gpt(retrieve_prompt)
+            st.rerun()
+        else:
+            st.info("No previous understanding found on this topic. Let's work through it together!")
+            
+    except Exception as e:
+        st.info("No previous understanding found on this topic. Let's work through it together!")
 
 
 def trigger_review():
@@ -109,12 +204,21 @@ with st.sidebar:
         
         st.markdown("---")
         
-        # Review button - show after first exchange
-        if len(st.session_state.messages) >= 2:
-            if st.button("📝 Review Session", use_container_width=True, type="primary"):
-                with st.spinner("Preparing review..."):
-                    trigger_review()
-                st.rerun()
+        # Review button - always show from start
+        if st.button("📝 Review Session", use_container_width=True, type="primary"):
+            with st.spinner("Preparing review..."):
+                trigger_review()
+            st.rerun()
+        
+        st.markdown("---")
+        
+        # Save recent response button
+        if st.button("💾 Save Recent Response", use_container_width=True):
+            save_recent_response()
+        
+        # Retrieve previous understanding button
+        if st.button("🔍 Retrieve Previous Understanding", use_container_width=True):
+            retrieve_previous_understanding()
         
         st.markdown("---")
         
