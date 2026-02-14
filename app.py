@@ -190,7 +190,7 @@ def reset_session():
 
 # ===== UI LAYOUT =====
 
-st.title("🤖 Collaborative ML Learning System")
+st.title("Collaborative ML Learning System")
 st.markdown("Learn Data Science & ML concepts through collaborative dialogue")
 
 # Sidebar for session configuration
@@ -205,7 +205,7 @@ with st.sidebar:
         st.markdown("---")
         
         # Review button - always show from start
-        if st.button("📝 Review Session", use_container_width=True, type="primary"):
+        if st.button("Review Session", use_container_width=True, type="primary"):
             with st.spinner("Preparing review..."):
                 trigger_review()
             st.rerun()
@@ -213,11 +213,11 @@ with st.sidebar:
         st.markdown("---")
         
         # Save recent response button
-        if st.button("💾 Save Recent Response", use_container_width=True):
+        if st.button("Save Recent Response", use_container_width=True):
             save_recent_response()
         
         # Retrieve previous understanding button
-        if st.button("🔍 Retrieve Previous Understanding", use_container_width=True):
+        if st.button("Retrieve Previous Understanding", use_container_width=True):
             retrieve_previous_understanding()
         
         st.markdown("---")
@@ -266,21 +266,21 @@ if st.session_state.depth_level is None:
     col1, col2, col3 = st.columns(3)
     
     with col1:
-        if st.button("📝 Interview Prep", use_container_width=True, type="primary"):
+        if st.button("Interview Prep", use_container_width=True, type="primary"):
             st.session_state.depth_level = "interview"
             st.session_state.system_prompt = get_system_prompt("interview")
             st.rerun()
         st.caption("Focus on practical concepts and clear articulation")
     
     with col2:
-        if st.button("📚 Exam Preparation", use_container_width=True, type="primary"):
+        if st.button("Exam Preparation", use_container_width=True, type="primary"):
             st.session_state.depth_level = "exam"
             st.session_state.system_prompt = get_system_prompt("exam")
             st.rerun()
         st.caption("Balanced depth with theory and practice")
     
     with col3:
-        if st.button("🔬 Research Report", use_container_width=True, type="primary"):
+        if st.button("Research Report", use_container_width=True, type="primary"):
             st.session_state.depth_level = "research"
             st.session_state.system_prompt = get_system_prompt("research")
             st.rerun()
@@ -311,4 +311,4 @@ else:
 
 # Footer
 st.markdown("---")
-st.caption("Collaborative Learning System | Powered by GPT-4o-mini & Streamlit")
+st.caption("Collaborative Learning System | Powered by GPT-4.1-nano & Streamlit")
